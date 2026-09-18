@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+prempredictor/
+
+# Env / secrets
+.env
+
+# OS
+.DS_Store
+
+# Data & models (regenerated, not committed)
+data/raw/*
+data/processed/*
+models/*.pkl
+models/*.joblib
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
