@@ -39,4 +39,8 @@ API credentials go in a local `.env` file (not committed, see `.env.example` for
 
 ## Status
 
-Data fetching is working: `src/data_fetch.py` pulls league standings, the full season's fixtures (looped week by week), and head-to-head data per match, saving raw JSON under `data/raw/`. Next up: feature engineering and suspension tracking from card history. See `docs/DECISIONS.md` for the full history and open questions.
+- **Data fetching** (`src/data_fetch.py`) — pulls league standings, fixtures (looped week by week), and head-to-head data per match from live-football-api.com, saving raw JSON under `data/raw/`. Supports multiple seasons (`SEASONS` constant — current + 4 prior).
+- **Feature engineering** (`src/features.py`) — builds a labeled training DataFrame (`build_training_set`) from all finished matches across the 5 seasons, and a features-only DataFrame for the next unplayed matchweek (`build_prediction_set`). Features are computed point-in-time (form, points, goal difference, head-to-head) to avoid leaking future information into historical rows.
+- **Model training** (`src/train.py`) — scaffolded, not yet implemented.
+
+See `docs/DECISIONS.md` for the full history, reasoning, and open questions.
