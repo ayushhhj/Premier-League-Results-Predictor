@@ -11,14 +11,15 @@ prempredictor/
 # OS
 .DS_Store
 
-# Data & models (regenerated, not committed)
-data/raw/*
+# Data & models (data/raw/ IS committed — the GitHub Actions job builds on it)
 data/processed/*
 models/*.pkl
 models/*.joblib
-!data/raw/.gitkeep
 !data/processed/.gitkeep
 !models/.gitkeep
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Built page (published by GitHub Actions, not committed)
+site/

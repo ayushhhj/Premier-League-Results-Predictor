@@ -2,6 +2,8 @@ pandas
 requests
 numpy
 scikit-learn
-xgboost
-requests
+joblib
+statsmodels
+soccerdata
 python-dotenv
+penaltyblog
