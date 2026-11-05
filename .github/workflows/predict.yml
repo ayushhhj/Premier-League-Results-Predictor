@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+        with:
+          ref: main   # latest main, not the triggering commit (matters for re-runs)
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -73,6 +75,8 @@ jobs:
             echo "Nothing changed."
           else
             git commit -m "Daily update: data, predictions and results ($(date -u +%F))"
+            # pick up anything pushed since checkout; this run's data wins conflicts
+            git pull --rebase -X theirs origin main
             git push
           fi
 
