@@ -8,8 +8,8 @@ name: Predict and publish
 
 on:
   schedule:
-    - cron: "17 9 * * *"   # daily, 09:17 UTC
-  workflow_dispatch:        # manual runs from the Actions tab
+    - cron: "17 3,15 * * *" # daily, 09:17 UTC
+  workflow_dispatch: # manual runs from the Actions tab
 
 # one run at a time, since each one commits and pushes
 concurrency:
@@ -17,9 +17,9 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # commit data back to the repo
+  contents: write # commit data back to the repo
   pages: write
-  id-token: write   # required by deploy-pages
+  id-token: write # required by deploy-pages
 
 jobs:
   predict:
@@ -37,12 +37,12 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
         with:
-          ref: main   # latest main, not the triggering commit (matters for re-runs)
+          ref: main # latest main, not the triggering commit (matters for re-runs)
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"   # 3.12+ needed
+          python-version: "3.13" # 3.12+ needed
           cache: pip
 
       - name: Install dependencies
@@ -57,7 +57,7 @@ jobs:
 
       # no-op unless the next gameweek starts tomorrow
       - name: Predict next gameweek
-        run: python predict.py --if-starts-tomorrow
+        run: python predict.py --if-due
 
       - name: Score predictions against results
         run: python score_results.py

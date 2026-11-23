@@ -348,6 +348,19 @@ Decision: dropped `home_xg`/`away_xg`, going from 13 features to 11. Not because
 
 GW10 predictions were remade with the 11-feature model before kickoff. All 10 picks stayed the same; probabilities moved by up to 9 points (Man United v Villa, home win 46% down to 37%).
 
+## 2026-11-23: GW11 missed; prediction and fetching made resilient
+
+GW11 (starting Saturday, Nov 21) was never predicted. The Nov 20 run crashed in the rest-days fetch: the API returned an empty, non-JSON response for one team, `get_team_matches` called `response.json()` without checking, and the failure stopped every later step. `predict.py --if-starts-tomorrow` only predicted on the exact day before a gameweek, so Saturday's run skipped it and the gameweek was lost. Replaying Nov 20 on that day's data showed `predict.py` itself worked.
+
+Two other findings: the scheduled 09:17 UTC runs were actually starting between 15:43 and 19:54 UTC (GitHub delays scheduled jobs under load and can drop them), and neither fetch function checked responses before saving, so an error message could overwrite a team's saved matches, or a failed gameweek could be saved without its fixtures and silently disappear from the data.
+
+Changes:
+- `data_fetch.py`: every request goes through `get_json`, which retries 3 times (waiting 5, then 10 seconds) and only accepts JSON with a `data` field. If a request still fails, the previously saved file (or gameweek, for fixtures) is kept and a warning is printed, which GitHub Actions also shows in the run summary. Warnings name the endpoint only, never the URL with the API key.
+- `predict.py`: `--if-starts-tomorrow` is replaced by `--if-due`. A gameweek is due when it has no saved predictions, its first unplayed kickoff hasn't passed, and that kickoff is within 48 hours. Kickoff times are UK local time and converted to UTC. Any run in the window makes the prediction, so a late or failed run is caught up by the next one. If every run before kickoff is missed, a run between matchdays still predicts the matches that haven't started.
+- Workflow: runs twice a day (03:17 and 15:17 UTC) instead of once, about 120 API calls a day. Credits remaining on Nov 22: 48,082.
+
+Replayed against the Nov 19 data, GW11 would have been due from Thursday 12:30 UTC until the first kickoff on Saturday, so the Thursday run at 18:21 UTC would have predicted it.
+
 ## Open questions
 
 - Whether to save the built training and prediction DataFrames to `data/processed/`, or keep rebuilding them from `data/raw/` each time. Rebuilding all 5 seasons takes well under a second, so saving them may not be worth the extra complexity. Leaning towards rebuilding, not yet decided.

@@ -19,8 +19,47 @@ MATCHES_DIR = os.path.join(DATA_DIR, "matches")
 TEAM_MATCHES_DIR = os.path.join(DATA_DIR, "team_matches")
 
 
+RETRIES = 3
+RETRY_WAIT = 5  # seconds, doubled after each failed attempt
+
+
 def _season_tag(season):
     return season.replace("/", "-")
+
+
+def warn(message):
+    """Print a warning; GitHub Actions also shows it in the run summary."""
+    print(f"::warning::{message}")
+
+
+def get_json(endpoint, params):
+    """GET an API endpoint and return the parsed response, or None if it still fails after retries.
+
+    A response only counts if it's JSON with a "data" field and success isn't false; rate
+    limits and outages come back as errors or empty bodies.
+    """
+    wait = RETRY_WAIT
+    for attempt in range(1, RETRIES + 1):
+        problem = None
+        try:
+            response = requests.get(URL + endpoint, params=params, timeout=30)
+            payload = response.json()
+            if response.ok and isinstance(payload, dict) and "data" in payload and payload.get("success") is not False:
+                return payload
+            problem = f"HTTP {response.status_code}: {str(payload.get('message') if isinstance(payload, dict) else payload)[:100]}"
+        except (requests.RequestException, ValueError) as e:  # ValueError covers non-JSON bodies
+            problem = type(e).__name__
+        if attempt < RETRIES:
+            time.sleep(wait)
+            wait *= 2
+    # params holds the API key, so only the endpoint goes in the message
+    warn(f"{endpoint} failed after {RETRIES} attempts ({problem})")
+    return None
+
+
+def save_json(path, data):
+    with open(path, "w") as f:
+        json.dump(data, f)
 
 
 def get_league_standings(season):
@@ -30,17 +69,24 @@ def get_league_standings(season):
         "season": season,
         "lang": "en",
     }
-    response = requests.get(URL + "/league_standings", params=params)
-    data = response.json()
-    path = os.path.join(DATA_DIR, f"league_standings_{_season_tag(season)}.json")
-    with open(path, "w") as f:
-        json.dump(data, f)
+    data = get_json("/league_standings", params)
+    if data is None:
+        warn(f"{season} standings: kept the previously saved file")
+        return None
+    save_json(os.path.join(DATA_DIR, f"league_standings_{_season_tag(season)}.json"), data)
     return data
 
 
 def get_league_matches(season):
-    all_weeks = []
+    """Fetch all 38 gameweeks of fixtures. A gameweek that fails keeps its previously saved data."""
     path = os.path.join(DATA_DIR, f"league_fixtures_{_season_tag(season)}.json")
+    try:
+        with open(path) as f:
+            previous = json.load(f)
+    except (FileNotFoundError, ValueError):
+        previous = []
+
+    all_weeks = []
     for i in range(1, 39):
         params = {
             "api_key": API_KEY,
@@ -49,11 +95,13 @@ def get_league_matches(season):
             "week": i,
             "lang": "en",
         }
-        response = requests.get(URL + "/league_fixtures", params=params)
-        all_weeks.append(response.json())
-        with open(path, "w") as f:
-            json.dump(all_weeks, f)
+        week = get_json("/league_fixtures", params)
+        if week is None:
+            week = previous[i - 1] if len(previous) >= i else {}
+            warn(f"{season} gameweek {i}: kept the previously saved fixtures")
+        all_weeks.append(week)
         time.sleep(0.5)
+    save_json(path, all_weeks)
     return all_weeks
 
 
@@ -81,12 +129,10 @@ def get_h2h_matches(season):
             "match_id": match_id,
             "lang": "en",
         }
-        response = requests.get(URL + "/h2h", params=params)
-        data = response.json()
-        results.append(data)
-        path = os.path.join(MATCHES_DIR, f"h2h_{match_id}.json")
-        with open(path, "w") as f:
-            json.dump(data, f)
+        data = get_json("/h2h", params)
+        if data is not None:
+            results.append(data)
+            save_json(os.path.join(MATCHES_DIR, f"h2h_{match_id}.json"), data)
         time.sleep(0.5)
     return results
 
@@ -108,19 +154,21 @@ def get_season_team_ids(season):
 
 
 def get_team_matches(team_id, season):
-    """Fetch and save a team's matches across all competitions for a season (used for rest days)."""
+    """Fetch and save a team's matches in all competitions for a season (used for rest days).
+
+    Returns None and keeps the previously saved file if the request fails.
+    """
     params = {
         "api_key": API_KEY,
         "team_id": team_id,
         "season": season,
         "lang": "en",
     }
-    response = requests.get(URL + "/team_matches", params=params)
-    data = response.json()
+    data = get_json("/team_matches", params)
+    if data is None:
+        return None
     os.makedirs(TEAM_MATCHES_DIR, exist_ok=True)
-    path = os.path.join(TEAM_MATCHES_DIR, f"{team_id}_{_season_tag(season)}.json")
-    with open(path, "w") as f:
-        json.dump(data, f)
+    save_json(os.path.join(TEAM_MATCHES_DIR, f"{team_id}_{_season_tag(season)}.json"), data)
     return data
 
 
@@ -128,10 +176,14 @@ def get_all_team_matches(seasons=SEASONS):
     """Fetch get_team_matches for every team in each season's fixtures (~20 API calls per season)."""
     for season in seasons:
         team_ids = get_season_team_ids(season)
+        failed = 0
         for team_id in team_ids:
-            get_team_matches(team_id, season)
+            if get_team_matches(team_id, season) is None:
+                failed += 1
             time.sleep(0.5)
-        print(f"{season}: team_matches saved for {len(team_ids)} teams")
+        print(f"{season}: team_matches saved for {len(team_ids) - failed} of {len(team_ids)} teams")
+        if failed:
+            warn(f"{season}: {failed} team(s) kept their previously saved matches")
 
 
 if __name__ == "__main__":

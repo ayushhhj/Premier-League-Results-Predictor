@@ -10,7 +10,7 @@ Predict every Premier League match one gameweek at a time, then move on to exact
 
 - **Phase 1, outcome classifier (done):** data pipeline, point-in-time features, model comparison and a weekly prediction script.
 - **Phase 2, scoreline prediction:** predict exact scores. Dixon-Coles (already in `train.py`) is the starting point because it models goal rates directly.
-- **Phase 3, web dashboard (in progress):** a GitHub Actions job refreshes the data every day, predicts the next gameweek the day before it starts, scores past predictions and publishes a page on GitHub Pages.
+- **Phase 3, web dashboard (in progress):** a GitHub Actions job refreshes the data twice a day, predicts the next gameweek in the 48 hours before it starts, scores past predictions and publishes a page on GitHub Pages.
 
 ## Model
 
@@ -91,10 +91,10 @@ Predict the next gameweek:
 
 ```
 python predict.py                        # writes data/predictions/2026-2027_GW<n>.csv
-python predict.py --if-starts-tomorrow   # only runs if the next gameweek starts tomorrow
+python predict.py --if-due              # only runs if the next gameweek is due (see below)
 ```
 
-Predictions only go one gameweek ahead, because features for later gameweeks depend on results that haven't happened yet. A saved gameweek is never overwritten; delete its file by hand to redo it.
+Predictions only go one gameweek ahead, because features for later gameweeks depend on results that haven't happened yet. With `--if-due`, a gameweek is predicted by the first run within 48 hours of its first kickoff, as long as that kickoff hasn't passed. A saved gameweek is never overwritten; delete its file by hand to redo it.
 
 Score predictions and build the page:
 
@@ -110,4 +110,4 @@ python holdout_gameweek.py               # hold out the latest finished gameweek
 python holdout_gameweek.py --rolling     # every finished gameweek, pooled
 ```
 
-The GitHub Actions workflow runs the refresh, prediction, scoring and page build every day at 09:17 UTC and publishes the page.
+The GitHub Actions workflow runs the refresh, prediction, scoring and page build twice a day (scheduled for 03:17 and 15:17 UTC, though GitHub often starts them hours late) and publishes the page. If the football API fails, the fetch scripts retry, keep the previously saved data and carry on, so the rest of the run still happens.
